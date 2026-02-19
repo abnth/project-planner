@@ -21,21 +21,28 @@ const MilestoneLine: React.FC<{
 }> = ({ milestone, timelineStart, dayWidth, totalHeight }) => {
   const { dispatch } = useRoadmapStore();
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(milestone.name);
+  const inputRef = useRef<HTMLInputElement>(null);
   const dragStartRef = useRef({ clientX: 0, origDate: '' });
+  const didDragRef = useRef(false);
 
   const x = dateToX(milestone.date, timelineStart, dayWidth);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      if (isEditing) return;
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
+      didDragRef.current = false;
       dragStartRef.current = { clientX: e.clientX, origDate: milestone.date };
 
       const origX = dateToX(milestone.date, timelineStart, dayWidth);
 
       const handleMouseMove = (ev: MouseEvent) => {
         const dx = ev.clientX - dragStartRef.current.clientX;
+        if (Math.abs(dx) > 2) didDragRef.current = true;
         const newDate = xToDate(origX + dx, timelineStart, dayWidth);
         if (newDate !== milestone.date) {
           dispatch({
@@ -54,8 +61,38 @@ const MilestoneLine: React.FC<{
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [milestone, timelineStart, dayWidth, dispatch],
+    [milestone, timelineStart, dayWidth, dispatch, isEditing],
   );
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditValue(milestone.name);
+    setIsEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }, [milestone.name]);
+
+  const commitEdit = useCallback(() => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== milestone.name) {
+      dispatch({
+        type: 'UPDATE_MILESTONE',
+        payload: { ...milestone, name: trimmed },
+      });
+    }
+    setIsEditing(false);
+  }, [editValue, milestone, dispatch]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') commitEdit();
+    if (e.key === 'Escape') setIsEditing(false);
+  }, [commitEdit]);
+
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dispatch({ type: 'DELETE_MILESTONE', payload: milestone.id });
+  }, [milestone.id, dispatch]);
 
   return (
     <>
@@ -80,23 +117,46 @@ const MilestoneLine: React.FC<{
         />
       </div>
 
-      {/* Draggable label + diamond at the bottom */}
+      {/* Label + diamond at the bottom */}
       <div
-        className={`absolute flex flex-col items-center cursor-ew-resize select-none ${isDragging ? 'z-50' : 'z-30'}`}
-        style={{ left: x - 40, top: totalHeight + 4, width: 80 }}
-        onMouseDown={handleMouseDown}
-        title={`${milestone.name}\n${milestone.date}\nDrag to move`}
+        className={`absolute flex flex-col items-center select-none group/label ${isDragging ? 'z-50' : 'z-30'} ${isEditing ? '' : 'cursor-ew-resize'}`}
+        style={{ left: x - 50, top: totalHeight + 4, width: 100 }}
+        onMouseDown={isEditing ? undefined : handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        title={isEditing ? undefined : `${milestone.name}\n${milestone.date}\nDrag to move · Double-click to rename`}
       >
         {/* Diamond marker */}
-        <div
-          className={`w-3 h-3 bg-red-500 rotate-45 mb-1 transition-transform ${
-            isDragging ? 'scale-125' : ''
-          }`}
-          style={{ flexShrink: 0 }}
-        />
-        <span className="text-[9px] text-gray-600 text-center leading-tight font-medium">
-          {milestone.name}
-        </span>
+        <div className="relative">
+          <div
+            className={`w-3 h-3 bg-red-500 rotate-45 mb-1 transition-transform ${
+              isDragging ? 'scale-125' : ''
+            }`}
+            style={{ flexShrink: 0 }}
+          />
+          {/* Delete button on hover */}
+          <button
+            className="absolute -top-1.5 -right-4 w-4 h-4 rounded-full bg-red-100 text-red-600 text-[10px] leading-none font-bold opacity-0 group-hover/label:opacity-100 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+            onClick={handleDelete}
+            title="Delete milestone"
+          >
+            &times;
+          </button>
+        </div>
+
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            className="text-[9px] text-gray-800 text-center leading-tight font-medium bg-white border border-blue-400 rounded px-1 py-0.5 w-full outline-none shadow-sm"
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleKeyDown}
+          />
+        ) : (
+          <span className="text-[9px] text-gray-600 text-center leading-tight font-medium">
+            {milestone.name}
+          </span>
+        )}
       </div>
     </>
   );
