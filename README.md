@@ -16,6 +16,7 @@ An interactive Gantt-style roadmap planner built with React, TypeScript, and Tai
 - **JSON editor** -- inspect and edit roadmap data as JSON
 - **Export / Import** -- save roadmaps to JSON files and load them back
 - **Auto-save** -- changes persist in localStorage
+- **Share your roadmap** -- creates a link that has your data encoded in the url for sharing! 
 
 ## Getting Started
 
