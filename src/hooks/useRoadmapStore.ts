@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import { Task, Lane, Milestone, RoadmapData, ZoomLevel } from '../types';
 import { cascadeShift, enforceDependencyConstraints, normalizeSortOrder } from '../utils/dependencyGraph';
-import { saveToLocalStorage, getInitialData, getActiveRoadmapId, setActiveRoadmapId } from '../utils/exportImport';
+import { saveToLocalStorage, getInitialData, getActiveRoadmapId, setActiveRoadmapId, decodeRoadmapFromUrl, clearShareHash } from '../utils/exportImport';
 
 // ---- State ----
 
@@ -243,8 +243,11 @@ export function useRoadmapStore() {
 // ---- Provider ----
 
 export function createRoadmapProvider() {
-  const activeId = getActiveRoadmapId();
-  const initData = getInitialData(activeId);
+  const sharedData = decodeRoadmapFromUrl();
+  const isSharedView = !!sharedData;
+
+  const activeId = isSharedView ? 'shared' : getActiveRoadmapId();
+  const initData = sharedData || getInitialData(activeId);
   const initialState: RoadmapState = {
     data: { ...initData, tasks: normalizeSortOrder(initData.tasks) },
     zoom: 'week',
@@ -253,17 +256,23 @@ export function createRoadmapProvider() {
     activeRoadmapId: activeId,
   };
 
+  if (isSharedView) {
+    clearShareHash();
+  }
+
   const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(roadmapReducer, initialState);
 
-    // Auto-save to localStorage on every state change
     useEffect(() => {
-      saveToLocalStorage(state.data, state.activeRoadmapId);
+      if (state.activeRoadmapId !== 'shared') {
+        saveToLocalStorage(state.data, state.activeRoadmapId);
+      }
     }, [state.data, state.activeRoadmapId]);
 
-    // Sync active roadmap ID to localStorage
     useEffect(() => {
-      setActiveRoadmapId(state.activeRoadmapId);
+      if (state.activeRoadmapId !== 'shared') {
+        setActiveRoadmapId(state.activeRoadmapId);
+      }
     }, [state.activeRoadmapId]);
 
     const value = React.useMemo(() => ({ state, dispatch }), [state, dispatch]);

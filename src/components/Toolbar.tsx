@@ -1,7 +1,7 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useRoadmapStore } from '../hooks/useRoadmapStore';
 import { ZoomLevel } from '../types';
-import { exportToJson, importFromJson, clearLocalStorage, getInitialData } from '../utils/exportImport';
+import { exportToJson, importFromJson, clearLocalStorage, getInitialData, encodeRoadmapToUrl } from '../utils/exportImport';
 import { roadmapRegistry, getRoadmapById } from '../data/roadmapRegistry';
 
 export const Toolbar: React.FC = () => {
@@ -77,7 +77,20 @@ export const Toolbar: React.FC = () => {
     dispatch({ type: 'TOGGLE_JSON_EDITOR' });
   }, [dispatch]);
 
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
+
+  const handleShare = useCallback(() => {
+    const url = encodeRoadmapToUrl(state.data);
+    navigator.clipboard.writeText(url).then(() => {
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus('idle'), 2000);
+    }).catch(() => {
+      window.prompt('Copy this share link:', url);
+    });
+  }, [state.data]);
+
   const currentEntry = getRoadmapById(state.activeRoadmapId);
+  const isSharedView = state.activeRoadmapId === 'shared';
 
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 shadow-sm flex-wrap">
@@ -89,8 +102,11 @@ export const Toolbar: React.FC = () => {
         value={state.activeRoadmapId}
         onChange={(e) => handleSwitchRoadmap(e.target.value)}
         className="px-2 py-1.5 text-sm font-medium border border-gray-300 rounded bg-white text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 max-w-[220px]"
-        title={currentEntry?.description}
+        title={currentEntry?.description || (isSharedView ? 'Loaded from a shared link' : undefined)}
       >
+        {isSharedView && (
+          <option value="shared">Shared Roadmap</option>
+        )}
         {roadmapRegistry.map(entry => (
           <option key={entry.id} value={entry.id}>
             {entry.name}
@@ -147,6 +163,17 @@ export const Toolbar: React.FC = () => {
         }`}
       >
         {state.showJsonEditor ? 'Hide JSON' : 'JSON Editor'}
+      </button>
+      <button
+        onClick={handleShare}
+        className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+          shareStatus === 'copied'
+            ? 'bg-green-100 text-green-800'
+            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+        }`}
+        title="Generate a shareable link with the current roadmap encoded in the URL"
+      >
+        {shareStatus === 'copied' ? 'Link Copied!' : 'Share'}
       </button>
       <button
         onClick={handleExport}

@@ -1,3 +1,4 @@
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { RoadmapData } from '../types';
 import { getRoadmapById, getDefaultRoadmapId } from '../data/roadmapRegistry';
 
@@ -115,4 +116,47 @@ export function getInitialData(roadmapId?: string): RoadmapData {
 
   const entry = getRoadmapById(id);
   return entry ? { ...entry.defaultData } : { ...getRoadmapById(getDefaultRoadmapId())!.defaultData };
+}
+
+// ---- URL Sharing ----
+
+const SHARE_HASH_PREFIX = 'data=';
+
+/**
+ * Encode roadmap data into a shareable URL.
+ */
+export function encodeRoadmapToUrl(data: RoadmapData): string {
+  const json = JSON.stringify(data);
+  const compressed = compressToEncodedURIComponent(json);
+  const base = window.location.href.split('#')[0];
+  return `${base}#${SHARE_HASH_PREFIX}${compressed}`;
+}
+
+/**
+ * Try to decode roadmap data from the current URL hash.
+ * Returns null if no valid shared data is found.
+ */
+export function decodeRoadmapFromUrl(): RoadmapData | null {
+  const hash = window.location.hash.slice(1); // strip leading #
+  if (!hash.startsWith(SHARE_HASH_PREFIX)) return null;
+
+  try {
+    const compressed = hash.slice(SHARE_HASH_PREFIX.length);
+    const json = decompressFromEncodedURIComponent(compressed);
+    if (!json) return null;
+    const data = JSON.parse(json) as RoadmapData;
+    if (!data.lanes || !data.tasks || !data.milestones) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear the shared-data hash from the URL without triggering navigation.
+ */
+export function clearShareHash(): void {
+  if (window.location.hash.startsWith(`#${SHARE_HASH_PREFIX}`)) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
 }
